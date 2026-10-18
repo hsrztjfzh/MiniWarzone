@@ -1,0 +1,59 @@
+name: Build Godot Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Download Godot
+        shell: bash
+        run: |
+          GODOT_VERSION="4.7.2"
+          BASE_URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          wget "$BASE_URL/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          wget "$BASE_URL/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip" -d godot
+          chmod +x godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip "Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -d template_files
+          cp template_files/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+
+      - name: Configure Android SDK
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Import project
+        run: |
+          godot/Godot_v4.7.2-stable_linux.x86_64 --headless --editor --path . --quit
+
+      - name: Export APK
+        run: |
+          mkdir -p build
+          godot/Godot_v4.7.2-stable_linux.x86_64 --headless --path . --export-debug "Android" build/MiniWarzone.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MiniWarzone-Android
+          path: build/MiniWarzone.apk
+          if-no-files-found: error
